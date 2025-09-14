@@ -1,3 +1,4 @@
+
 // server.js - Backend completo para optimizador de rutas
 // Optimizado para Railway deployment con PostgreSQL
 const express = require('express');
@@ -322,6 +323,10 @@ app.post('/api/import/excel', upload.single('file'), async (req, res) => {
 // Crear tablas básicas si no existen (para demo)
 async function initializeDatabase() {
   try {
+    // Verificar conexión primero
+    await pool.query('SELECT NOW()');
+    console.log('✅ Conexión a PostgreSQL exitosa');
+    
     // Crear tabla de proveedores
     await pool.query(`
       CREATE TABLE IF NOT EXISTS proveedores (
@@ -388,7 +393,8 @@ async function initializeDatabase() {
     await insertarDatosPrueba();
     
   } catch (error) {
-    console.error('Error inicializando base de datos:', error);
+    console.error('⚠️ Error inicializando base de datos:', error.message);
+    console.log('🔄 Servidor continuará sin base de datos (modo demo)');
   }
 }
 
@@ -398,8 +404,12 @@ async function insertarDatosPrueba() {
     // Verificar si ya existen datos
     const existingProviders = await pool.query('SELECT COUNT(*) FROM proveedores');
     if (parseInt(existingProviders.rows[0].count) > 0) {
-      console.log('✅ Datos de prueba ya existen');
-      return;
+      // Verificar si ya hay vehículos
+      const existingVehicles = await pool.query('SELECT COUNT(*) FROM vehiculos');
+      if (parseInt(existingVehicles.rows[0].count) > 0) {
+        console.log('✅ Datos de prueba ya existen');
+        return;
+      }
     }
     
     // Insertar proveedores principales
@@ -429,7 +439,132 @@ async function insertarDatosPrueba() {
       );
     }
     
-    console.log('✅ Datos de prueba insertados');
+    // Obtener IDs de proveedores y tipos
+    const proveedoresIds = await pool.query('SELECT id, nombre FROM proveedores');
+    const tiposIds = await pool.query('SELECT id, nombre FROM tipos_vehiculo');
+    
+    const proveedorMap = {};
+    proveedoresIds.rows.forEach(p => proveedorMap[p.nombre] = p.id);
+    
+    const tipoMap = {};
+    tiposIds.rows.forEach(t => tipoMap[t.nombre] = t.id);
+    
+    // Insertar vehículos basados en tu flota real exacta
+    const vehiculos = [
+      // TTES BARA - 5 vehículos exactos
+      { numero: 7, proveedor: 'TTES BARA', nombre: 'TTES BARA - 007', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 8, proveedor: 'TTES BARA', nombre: 'TTES BARA - 008', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 13, proveedor: 'TTES BARA', nombre: 'TTES BARA - 013', tipo: '18 TONELADAS', capacidad: 30 },
+      { numero: 14, proveedor: 'TTES BARA', nombre: 'TTES BARA - 014', tipo: '18 TONELADAS', capacidad: 30 },
+      { numero: 20, proveedor: 'TTES BARA', nombre: 'TTES BARA - 020', tipo: '7.5 TONELADAS', capacidad: 17 },
+      
+      // GERMANS SARDA - según tu Excel
+      { numero: 2, proveedor: 'GERMANS SARDA', nombre: 'GERMANS SARDA - 002', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 3, proveedor: 'GERMANS SARDA', nombre: 'GERMANS SARDA - 003', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 4, proveedor: 'GERMANS SARDA', nombre: 'GERMANS SARDA - 004', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 5, proveedor: 'GERMANS SARDA', nombre: 'GERMANS SARDA - 005', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 6, proveedor: 'GERMANS SARDA', nombre: 'GERMANS SARDA - 006', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      
+      // IBARZO - según tu Excel  
+      { numero: 30, proveedor: 'IBARZO', nombre: 'IBARZO - 030', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      
+      // TESO - según tu Excel
+      { numero: 9, proveedor: 'TESO', nombre: 'TESO - 009', tipo: 'TREN DE CARRETERA', capacidad: 60 },
+      { numero: 11, proveedor: 'TESO', nombre: 'TESO - 011', tipo: '18 TONELADAS', capacidad: 48 },
+      { numero: 12, proveedor: 'TESO', nombre: 'TESO - 012', tipo: '18 TONELADAS', capacidad: 30 },
+      { numero: 16, proveedor: 'TESO', nombre: 'TESO - 016', tipo: '12 TONELADAS', capacidad: 24 },
+      
+      // TRANSMEDALLO - según tu Excel
+      { numero: 15, proveedor: 'TRANSMEDALLO', nombre: 'TRANSMEDALLO - 015', tipo: '12 TONELADAS', capacidad: 24 },
+      { numero: 17, proveedor: 'TRANSMEDALLO', nombre: 'TRANSMEDALLO - 017', tipo: '12 TONELADAS', capacidad: 24 },
+      { numero: 19, proveedor: 'TRANSMEDALLO', nombre: 'TRANSMEDALLO - 019', tipo: '7.5 TONELADAS', capacidad: 17 },
+      
+      // SANTIAGO LOZANO - según tu Excel
+      { numero: 18, proveedor: 'SANTIAGO LOZANO', nombre: 'SANTIAGO LOZANO - 018', tipo: '12 TONELADAS', capacidad: 22 },
+      
+      // TTES AGUSTIN - algunos ejemplos de tu Excel
+      { numero: 22, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 022', tipo: 'DOBLE PISO', capacidad: 89 },
+      { numero: 23, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 023', tipo: 'DOBLE PISO', capacidad: 89 },
+      { numero: 28, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 028', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 31, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 031', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 35, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 035', tipo: '18 TONELADAS', capacidad: 30 },
+      
+      // TTES RODRIGUEZ - algunos ejemplos de tu Excel
+      { numero: 1, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 001', tipo: 'DOBLE PISO', capacidad: 82 },
+      { numero: 24, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 024', tipo: 'DOBLE PISO', capacidad: 88 },
+      { numero: 25, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 025', tipo: 'DOBLE PISO', capacidad: 88 },
+      { numero: 27, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 027', tipo: 'TREN DE CARRETERA', capacidad: 63 },
+      { numero: 37, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 037', tipo: '12 TONELADAS', capacidad: 24 }
+    ];
+    
+    for (let vehiculo of vehiculos) {
+      const proveedorId = proveedorMap[vehiculo.proveedor];
+      const tipoId = tipoMap[vehiculo.tipo];
+      
+      if (proveedorId && tipoId) {
+        await pool.query(`
+          INSERT INTO vehiculos (numero_camion, proveedor_id, nombre_corto, tipo_pago, tipo_vehiculo_id, capacidad_combis)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT (numero_camion) DO NOTHING
+        `, [vehiculo.numero, proveedorId, vehiculo.nombre, 'por_combi', tipoId, vehiculo.capacidad]);
+      }
+    }
+    
+    // Insertar algunas tiendas de prueba
+    const tiendas = [
+      { codigo: '60318', nombre: 'Artés', provincia: 'BARCELONA', combis: 5.2 },
+      { codigo: '60445', nombre: 'Cervelló', provincia: 'BARCELONA', combis: 8.1 },
+      { codigo: '60446', nombre: 'Corbera de Llobregat', provincia: 'BARCELONA', combis: 6.3 },
+      { codigo: '60481', nombre: 'Manresa', provincia: 'BARCELONA', combis: 7.8 },
+      { codigo: '60485', nombre: 'Polinyà', provincia: 'BARCELONA', combis: 4.9 },
+      { codigo: '60489', nombre: 'Ripollet', provincia: 'BARCELONA', combis: 5.7 },
+      { codigo: '60078', nombre: 'María de Huerva', provincia: 'ZARAGOZA', combis: 6.2 },
+      { codigo: '60084', nombre: 'Quinto', provincia: 'ZARAGOZA', combis: 4.1 },
+      { codigo: '60093', nombre: 'Zaragoza', provincia: 'ZARAGOZA', combis: 12.3 }
+    ];
+    
+    for (let tienda of tiendas) {
+      await pool.query(`
+        INSERT INTO tiendas (codigo, nombre, provincia, combis_promedio)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (codigo) DO NOTHING
+      `, [tienda.codigo, tienda.nombre, tienda.provincia, tienda.combis]);
+    }
+    
+    // Crear tabla de relación tienda-proveedor si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tienda_proveedores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tienda_id UUID REFERENCES tiendas(id),
+        proveedor_id UUID REFERENCES proveedores(id),
+        motivo VARCHAR(255)
+      )
+    `);
+    
+    // Asignar tiendas a proveedores
+    const asignaciones = [
+      { proveedor: 'TTES BARA', tiendas: ['60318', '60445', '60446', '60481'] },
+      { proveedor: 'GERMANS SARDA', tiendas: ['60485', '60489'] },
+      { proveedor: 'IBARZO', tiendas: ['60078', '60084', '60093'] }
+    ];
+    
+    for (let asignacion of asignaciones) {
+      const proveedorId = proveedorMap[asignacion.proveedor];
+      
+      for (let codigoTienda of asignacion.tiendas) {
+        const tiendaResult = await pool.query('SELECT id FROM tiendas WHERE codigo = $1', [codigoTienda]);
+        if (tiendaResult.rows.length > 0) {
+          const tiendaId = tiendaResult.rows[0].id;
+          await pool.query(`
+            INSERT INTO tienda_proveedores (tienda_id, proveedor_id, motivo)
+            VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING
+          `, [tiendaId, proveedorId, 'Asignación de prueba']);
+        }
+      }
+    }
+    
+    console.log('✅ Datos de prueba insertados - Vehículos y tiendas añadidos');
     
   } catch (error) {
     console.error('Error insertando datos de prueba:', error);
@@ -442,10 +577,11 @@ async function startServer() {
   try {
     await initializeDatabase();
     
-    app.listen(port, '0.0.0.0', () => {
+    app.listen(port, () => {
       console.log(`🚀 Servidor corriendo en puerto ${port}`);
       console.log(`🗄️ Base de datos: ${process.env.DATABASE_URL ? 'PostgreSQL conectado' : 'PostgreSQL local'}`);
       console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🌐 URL: http://localhost:${port}`);
     });
   } catch (error) {
     console.error('❌ Error iniciando servidor:', error);
