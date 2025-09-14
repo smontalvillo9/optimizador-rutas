@@ -196,29 +196,50 @@ function calcularMetricas(rutas, totalTiendas) {
   };
 }
 
-// 🔧 ENDPOINT DE OPTIMIZACIÓN CORREGIDO - Ahora usa nombre del proveedor
+// 🔧 ENDPOINT DE OPTIMIZACIÓN HÍBRIDO - Funciona con ID o Nombre
 app.post('/api/optimizar', async (req, res) => {
   try {
     const { proveedor_id } = req.body;
     console.log(`🚀 Iniciando optimización para proveedor: ${proveedor_id}`);
     
-    // CORRECCIÓN: Obtener vehículos por NOMBRE del proveedor (no por ID)
+    // HÍBRIDO: Detectar si es UUID o nombre
+    const esUUID = proveedor_id.length === 36 && proveedor_id.includes('-');
+    let whereClause = '';
+    
+    if (esUUID) {
+      // Es un UUID - buscar por ID
+      whereClause = 'WHERE v.proveedor_id = $1 AND v.activo = true';
+      console.log(`🔍 Buscando por ID (UUID): ${proveedor_id}`);
+    } else {
+      // Es un nombre - buscar por nombre
+      whereClause = 'WHERE p.nombre = $1 AND v.activo = true';
+      console.log(`🔍 Buscando por nombre: ${proveedor_id}`);
+    }
+    
+    // Obtener vehículos del proveedor
     const vehiculosResult = await pool.query(`
       SELECT v.id, v.numero_camion, v.nombre_corto, v.tipo_pago, v.capacidad_combis,
              p.nombre as proveedor_nombre
       FROM vehiculos v
       LEFT JOIN proveedores p ON v.proveedor_id = p.id
-      WHERE p.nombre = $1 AND v.activo = true
+      ${whereClause}
       ORDER BY v.capacidad_combis DESC
     `, [proveedor_id]);
     
-    // CORRECCIÓN: Obtener tiendas por NOMBRE del proveedor (no por ID) 
+    // Obtener tiendas del proveedor usando la misma lógica
+    let tiendasWhereClause = '';
+    if (esUUID) {
+      tiendasWhereClause = 'WHERE tp.proveedor_id = $1';
+    } else {
+      tiendasWhereClause = 'WHERE p.nombre = $1';
+    }
+    
     const tiendasResult = await pool.query(`
       SELECT t.id, t.codigo, t.nombre, t.combis_promedio, t.provincia
       FROM tiendas t
       LEFT JOIN tienda_proveedores tp ON t.id = tp.tienda_id
       LEFT JOIN proveedores p ON tp.proveedor_id = p.id
-      WHERE p.nombre = $1
+      ${tiendasWhereClause}
       ORDER BY t.combis_promedio DESC
     `, [proveedor_id]);
     
@@ -232,6 +253,7 @@ app.post('/api/optimizar', async (req, res) => {
         error: 'No se encontraron vehículos o tiendas para este proveedor',
         debug: {
           proveedor: proveedor_id,
+          es_uuid: esUUID,
           vehiculos_count: vehiculos.length,
           tiendas_count: tiendas.length
         }
@@ -249,6 +271,7 @@ app.post('/api/optimizar', async (req, res) => {
       metricas: metricas,
       proveedor_id: proveedor_id,
       debug: {
+        es_uuid: esUUID,
         vehiculos_usados: vehiculos.length,
         tiendas_procesadas: tiendas.length,
         vehiculos_nombres: vehiculos.map(v => v.nombre_corto)
