@@ -147,12 +147,14 @@ app.get('/api/proveedores/:id/tiendas', async (req, res) => {
 
 // ==================== OPTIMIZACIÓN VRP ====================
 
-// Algoritmo VRP básico (First Fit Decreasing)
+// 🔧 ALGORITMO VRP CORREGIDO - Muestra TODOS los vehículos disponibles
 function optimizarRutasBasico(tiendas, vehiculos) {
+  console.log(`🚚 Iniciando optimización con ${vehiculos.length} vehículos y ${tiendas.length} tiendas`);
+  
   // Ordenar tiendas por combis descendente
   const tiendasOrdenadas = [...tiendas].sort((a, b) => b.combis_promedio - a.combis_promedio);
   
-  // Inicializar rutas
+  // Inicializar rutas para TODOS los vehículos
   const rutas = vehiculos.map(vehiculo => ({
     vehiculo_id: vehiculo.id,
     vehiculo_nombre: vehiculo.nombre_corto,
@@ -162,20 +164,46 @@ function optimizarRutasBasico(tiendas, vehiculos) {
     eficiencia: 0
   }));
   
+  console.log(`📋 Rutas inicializadas para ${rutas.length} vehículos:`, rutas.map(r => r.vehiculo_nombre));
+  
   // Asignar tiendas a vehículos (First Fit Decreasing)
-  tiendasOrdenadas.forEach(tienda => {
+  tiendasOrdenadas.forEach((tienda, index) => {
+    console.log(`🏪 Procesando tienda ${index + 1}/${tiendasOrdenadas.length}: ${tienda.nombre} (${tienda.combis_promedio} combis)`);
+    
+    let asignada = false;
     for (let ruta of rutas) {
       if (ruta.capacidad_usada + tienda.combis_promedio <= ruta.capacidad_maxima) {
         ruta.tiendas.push(tienda);
         ruta.capacidad_usada += tienda.combis_promedio;
         ruta.eficiencia = (ruta.capacidad_usada / ruta.capacidad_maxima) * 100;
+        console.log(`✅ Tienda ${tienda.nombre} asignada a ${ruta.vehiculo_nombre} (${ruta.capacidad_usada}/${ruta.capacidad_maxima} combis)`);
+        asignada = true;
         break;
       }
     }
+    
+    if (!asignada) {
+      console.log(`⚠️ Tienda ${tienda.nombre} NO pudo ser asignada - capacidad insuficiente`);
+    }
   });
   
-  // Filtrar rutas vacías
-  return rutas.filter(ruta => ruta.tiendas.length > 0);
+  // CAMBIO CLAVE: Devolver TODAS las rutas, incluso las vacías
+  const rutasConTiendas = rutas.filter(ruta => ruta.tiendas.length > 0);
+  const rutasVacias = rutas.filter(ruta => ruta.tiendas.length === 0);
+  
+  console.log(`📊 Resultado: ${rutasConTiendas.length} rutas con tiendas, ${rutasVacias.length} rutas vacías`);
+  
+  // Mostrar todas las rutas para diagnóstico
+  rutas.forEach((ruta, index) => {
+    if (ruta.tiendas.length > 0) {
+      console.log(`🚛 Ruta ${index + 1}: ${ruta.vehiculo_nombre} - ${ruta.tiendas.length} tiendas (${ruta.capacidad_usada} combis)`);
+    } else {
+      console.log(`🚛 Ruta ${index + 1}: ${ruta.vehiculo_nombre} - DISPONIBLE (0 combis)`);
+    }
+  });
+  
+  // Devolver TODAS las rutas para que aparezcan en el frontend
+  return rutas;
 }
 
 // Calcular métricas de optimización
@@ -186,7 +214,7 @@ function calcularMetricas(rutas, totalTiendas) {
   
   return {
     eficiencia_llenado: Math.round((capacidadUsada / totalCapacidad) * 100),
-    vehiculos_necesarios: rutas.length,
+    vehiculos_necesarios: rutas.filter(ruta => ruta.tiendas.length > 0).length,
     vehiculos_disponibles: rutas.length,
     tiendas_asignadas: tiendasAsignadas,
     tiendas_totales: totalTiendas,
