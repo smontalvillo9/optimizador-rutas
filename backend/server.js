@@ -1,4 +1,3 @@
-
 // server.js - Backend completo para optimizador de rutas
 // Optimizado para Railway deployment con PostgreSQL
 const express = require('express');
@@ -263,6 +262,71 @@ app.put('/api/escenarios/:id/activar', async (req, res) => {
   }
 });
 
+// ==================== ADMINISTRACIÓN ====================
+
+// ENDPOINT DE LIMPIEZA - Eliminar datos duplicados
+app.post('/api/admin/limpiar-datos', async (req, res) => {
+  try {
+    console.log('🧹 Iniciando limpieza de datos...');
+    
+    // Eliminar relaciones primero (para evitar foreign key constraints)
+    await pool.query('DELETE FROM tienda_proveedores');
+    console.log('✅ Relaciones tienda-proveedor eliminadas');
+    
+    // Eliminar datos principales
+    await pool.query('DELETE FROM vehiculos');
+    await pool.query('DELETE FROM tiendas');
+    await pool.query('DELETE FROM escenarios');
+    await pool.query('DELETE FROM proveedores');
+    await pool.query('DELETE FROM tipos_vehiculo');
+    console.log('✅ Todos los datos eliminados');
+    
+    // Reinsertar datos limpios
+    await insertarDatosPrueba();
+    console.log('✅ Datos limpios insertados');
+    
+    res.json({ 
+      message: 'Datos limpiados e insertados correctamente',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error limpiando datos:', error);
+    res.status(500).json({ error: 'Error limpiando datos: ' + error.message });
+  }
+});
+
+// ENDPOINT DE ESTADÍSTICAS - Para diagnóstico
+app.get('/api/admin/estadisticas', async (req, res) => {
+  try {
+    const stats = {
+      proveedores: await pool.query('SELECT COUNT(*) as total FROM proveedores'),
+      vehiculos: await pool.query('SELECT COUNT(*) as total FROM vehiculos'),
+      tiendas: await pool.query('SELECT COUNT(*) as total FROM tiendas'),
+      relaciones: await pool.query('SELECT COUNT(*) as total FROM tienda_proveedores'),
+      duplicados_proveedores: await pool.query(`
+        SELECT nombre, COUNT(*) as duplicados 
+        FROM proveedores 
+        GROUP BY nombre 
+        HAVING COUNT(*) > 1
+      `)
+    };
+    
+    res.json({
+      total_proveedores: parseInt(stats.proveedores.rows[0].total),
+      total_vehiculos: parseInt(stats.vehiculos.rows[0].total),
+      total_tiendas: parseInt(stats.tiendas.rows[0].total),
+      total_relaciones: parseInt(stats.relaciones.rows[0].total),
+      proveedores_duplicados: stats.duplicados_proveedores.rows,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error obteniendo estadísticas:', error);
+    res.status(500).json({ error: 'Error obteniendo estadísticas' });
+  }
+});
+
 // ==================== IMPORTACIÓN EXCEL ====================
 
 // Importar datos de Excel
@@ -472,29 +536,7 @@ async function insertarDatosPrueba() {
       { numero: 9, proveedor: 'TESO', nombre: 'TESO - 009', tipo: 'TREN DE CARRETERA', capacidad: 60 },
       { numero: 11, proveedor: 'TESO', nombre: 'TESO - 011', tipo: '18 TONELADAS', capacidad: 48 },
       { numero: 12, proveedor: 'TESO', nombre: 'TESO - 012', tipo: '18 TONELADAS', capacidad: 30 },
-      { numero: 16, proveedor: 'TESO', nombre: 'TESO - 016', tipo: '12 TONELADAS', capacidad: 24 },
-      
-      // TRANSMEDALLO - según tu Excel
-      { numero: 15, proveedor: 'TRANSMEDALLO', nombre: 'TRANSMEDALLO - 015', tipo: '12 TONELADAS', capacidad: 24 },
-      { numero: 17, proveedor: 'TRANSMEDALLO', nombre: 'TRANSMEDALLO - 017', tipo: '12 TONELADAS', capacidad: 24 },
-      { numero: 19, proveedor: 'TRANSMEDALLO', nombre: 'TRANSMEDALLO - 019', tipo: '7.5 TONELADAS', capacidad: 17 },
-      
-      // SANTIAGO LOZANO - según tu Excel
-      { numero: 18, proveedor: 'SANTIAGO LOZANO', nombre: 'SANTIAGO LOZANO - 018', tipo: '12 TONELADAS', capacidad: 22 },
-      
-      // TTES AGUSTIN - algunos ejemplos de tu Excel
-      { numero: 22, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 022', tipo: 'DOBLE PISO', capacidad: 89 },
-      { numero: 23, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 023', tipo: 'DOBLE PISO', capacidad: 89 },
-      { numero: 28, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 028', tipo: 'TREN DE CARRETERA', capacidad: 63 },
-      { numero: 31, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 031', tipo: 'TREN DE CARRETERA', capacidad: 63 },
-      { numero: 35, proveedor: 'TTES AGUSTIN', nombre: 'TTES AGUSTIN - 035', tipo: '18 TONELADAS', capacidad: 30 },
-      
-      // TTES RODRIGUEZ - algunos ejemplos de tu Excel
-      { numero: 1, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 001', tipo: 'DOBLE PISO', capacidad: 82 },
-      { numero: 24, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 024', tipo: 'DOBLE PISO', capacidad: 88 },
-      { numero: 25, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 025', tipo: 'DOBLE PISO', capacidad: 88 },
-      { numero: 27, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 027', tipo: 'TREN DE CARRETERA', capacidad: 63 },
-      { numero: 37, proveedor: 'TTES RODRIGUEZ', nombre: 'TTES RODRIGUEZ - 037', tipo: '12 TONELADAS', capacidad: 24 }
+      { numero: 16, proveedor: 'TESO', nombre: 'TESO - 016', tipo: '12 TONELADAS', capacidad: 24 }
     ];
     
     for (let vehiculo of vehiculos) {
