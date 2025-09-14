@@ -50,7 +50,44 @@ app.get('/api/vehiculos', async (req, res) => {
   }
 });
 
-// Obtener vehículos por proveedor
+// 🚛 ENDPOINT FALTANTE - Obtener vehículos por nombre de proveedor
+app.get('/api/vehiculos/:proveedor', async (req, res) => {
+  try {
+    const { proveedor } = req.params;
+    console.log(`🚛 Buscando vehículos para proveedor: ${proveedor}`);
+    
+    const result = await pool.query(`
+      SELECT v.*, p.nombre as proveedor_nombre, tv.nombre as tipo_nombre
+      FROM vehiculos v
+      LEFT JOIN proveedores p ON v.proveedor_id = p.id
+      LEFT JOIN tipos_vehiculo tv ON v.tipo_vehiculo_id = tv.id
+      WHERE p.nombre = $1 AND v.activo = true
+      ORDER BY v.numero_camion
+    `, [proveedor]);
+    
+    const vehiculos = result.rows.map(row => ({
+      id: row.id,
+      numero: row.numero_camion,
+      nombre: row.nombre_corto,
+      tipo: row.tipo_nombre,
+      capacidad: row.capacidad_combis,
+      proveedor: row.proveedor_nombre,
+      activo: row.activo
+    }));
+    
+    console.log(`✅ Encontrados ${vehiculos.length} vehículos para ${proveedor}`);
+    res.json(vehiculos);
+    
+  } catch (error) {
+    console.error('❌ Error obteniendo vehículos por proveedor:', error);
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      message: error.message 
+    });
+  }
+});
+
+// Obtener vehículos por proveedor (ID)
 app.get('/api/proveedores/:id/vehiculos', async (req, res) => {
   try {
     const { id } = req.params;
