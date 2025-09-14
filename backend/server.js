@@ -196,34 +196,45 @@ function calcularMetricas(rutas, totalTiendas) {
   };
 }
 
-// Endpoint de optimización
+// 🔧 ENDPOINT DE OPTIMIZACIÓN CORREGIDO - Ahora usa nombre del proveedor
 app.post('/api/optimizar', async (req, res) => {
   try {
     const { proveedor_id } = req.body;
+    console.log(`🚀 Iniciando optimización para proveedor: ${proveedor_id}`);
     
-    // Obtener vehículos del proveedor
+    // CORRECCIÓN: Obtener vehículos por NOMBRE del proveedor (no por ID)
     const vehiculosResult = await pool.query(`
-      SELECT id, numero_camion, nombre_corto, tipo_pago, capacidad_combis
-      FROM vehiculos 
-      WHERE proveedor_id = $1 AND activo = true
-      ORDER BY capacidad_combis DESC
+      SELECT v.id, v.numero_camion, v.nombre_corto, v.tipo_pago, v.capacidad_combis,
+             p.nombre as proveedor_nombre
+      FROM vehiculos v
+      LEFT JOIN proveedores p ON v.proveedor_id = p.id
+      WHERE p.nombre = $1 AND v.activo = true
+      ORDER BY v.capacidad_combis DESC
     `, [proveedor_id]);
     
-    // Obtener tiendas del proveedor
+    // CORRECCIÓN: Obtener tiendas por NOMBRE del proveedor (no por ID) 
     const tiendasResult = await pool.query(`
       SELECT t.id, t.codigo, t.nombre, t.combis_promedio, t.provincia
       FROM tiendas t
       LEFT JOIN tienda_proveedores tp ON t.id = tp.tienda_id
-      WHERE tp.proveedor_id = $1
+      LEFT JOIN proveedores p ON tp.proveedor_id = p.id
+      WHERE p.nombre = $1
       ORDER BY t.combis_promedio DESC
     `, [proveedor_id]);
     
     const vehiculos = vehiculosResult.rows;
     const tiendas = tiendasResult.rows;
     
+    console.log(`✅ Encontrados ${vehiculos.length} vehículos y ${tiendas.length} tiendas para ${proveedor_id}`);
+    
     if (!vehiculos.length || !tiendas.length) {
       return res.status(400).json({ 
-        error: 'No se encontraron vehículos o tiendas para este proveedor' 
+        error: 'No se encontraron vehículos o tiendas para este proveedor',
+        debug: {
+          proveedor: proveedor_id,
+          vehiculos_count: vehiculos.length,
+          tiendas_count: tiendas.length
+        }
       });
     }
     
@@ -231,16 +242,26 @@ app.post('/api/optimizar', async (req, res) => {
     const rutasOptimizadas = optimizarRutasBasico(tiendas, vehiculos);
     const metricas = calcularMetricas(rutasOptimizadas, tiendas.length);
     
+    console.log(`🎯 Optimización completada: ${rutasOptimizadas.length} rutas generadas`);
+    
     res.json({
       rutas: rutasOptimizadas,
       metricas: metricas,
       proveedor_id: proveedor_id,
+      debug: {
+        vehiculos_usados: vehiculos.length,
+        tiendas_procesadas: tiendas.length,
+        vehiculos_nombres: vehiculos.map(v => v.nombre_corto)
+      },
       timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    console.error('Error en optimización:', error);
-    res.status(500).json({ error: 'Error en la optimización de rutas' });
+    console.error('❌ Error en optimización:', error);
+    res.status(500).json({ 
+      error: 'Error en la optimización de rutas',
+      message: error.message 
+    });
   }
 });
 
